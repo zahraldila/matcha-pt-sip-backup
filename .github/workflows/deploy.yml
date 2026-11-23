@@ -1,0 +1,31 @@
+name: Deploy MATCHA Backup
+
+on:
+  push:
+    branches: [web/develop]
+
+concurrency:
+  group: deploy-backup
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_HOST }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$PORT" "$HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          SSH_USER: ${{ secrets.VPS_USER }}
+          HOST: ${{ secrets.VPS_HOST }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: ssh -p "$PORT" "$SSH_USER@$HOST" 'bash /var/www/matcha-maintenance/matcha-pt-sip-backup/deploy.sh'
