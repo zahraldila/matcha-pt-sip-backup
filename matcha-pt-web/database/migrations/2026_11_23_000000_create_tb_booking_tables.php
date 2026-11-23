@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('tb_booking')) {
+            return;
+        }
+
         Schema::create('tb_booking', function (Blueprint $table) {
             $table->id('booking_id');
             $table->string('booking_code', 32)->unique();
