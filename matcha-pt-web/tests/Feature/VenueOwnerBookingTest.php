@@ -6,6 +6,7 @@ use App\Models\Court;
 use App\Models\CourtBooking;
 use App\Models\User;
 use App\Models\Venue;
+use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -72,6 +73,47 @@ class VenueOwnerBookingTest extends TestCase
 
         $this->post(route('owner.bookings.store', $court->court_id), $payload)->assertRedirect();
         $this->assertSame(2, CourtBooking::query()->count());
+    }
+
+    public function test_past_manual_booking_returns_to_form_with_validation_error(): void
+    {
+        $owner = User::query()->create([
+            'nama' => 'Venue Owner',
+            'email' => 'past-owner@example.test',
+            'password' => bcrypt('secret'),
+            'role' => 'venue_owner',
+        ]);
+        $venue = Venue::query()->create([
+            'owner_user_id' => $owner->user_id,
+            'nama_venue' => 'Matcha Arena',
+            'jam_operasional' => '07:00 - 22:00',
+        ]);
+        $court = Court::query()->create([
+            'venue_id' => $venue->venue_id,
+            'nama_court' => 'Court 1',
+            'status_ketersediaan' => 'Available',
+            'harga_per_jam' => 100000,
+        ]);
+        $date = now()->toDateString();
+        Carbon::setTestNow(Carbon::parse($date.' 15:00:00'));
+
+        try {
+            $this->actingAs($owner)
+                ->from(route('owner.dashboard'))
+                ->post(route('owner.bookings.store', $court->court_id), [
+                    'tanggal' => $date,
+                    'jam_mulai' => '10:00',
+                    'jam_selesai' => '11:00',
+                    'nama_penyewa' => 'Penyewa Test',
+                    'status_pembayaran' => 'Paid',
+                ])
+                ->assertRedirect(route('owner.dashboard'))
+                ->assertSessionHasErrors('jam_mulai');
+
+            $this->assertSame(0, CourtBooking::query()->count());
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     private function createTestSchema(): void

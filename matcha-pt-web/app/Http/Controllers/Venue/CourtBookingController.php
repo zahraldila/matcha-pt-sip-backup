@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CourtBookingController extends Controller
 {
@@ -39,8 +40,10 @@ class CourtBookingController extends Controller
                 $validated['jam_selesai']
             );
             $startsAt = Carbon::parse($validated['tanggal'].' '.$validated['jam_mulai']);
-            if ($startsAt->isPast()) {
-                abort(422, 'Booking tidak dapat dibuat untuk waktu yang sudah lewat.');
+            if (! $startsAt->isFuture()) {
+                throw ValidationException::withMessages([
+                    'jam_mulai' => 'Booking tidak dapat dibuat untuk waktu yang sudah lewat.',
+                ]);
             }
 
             return CourtBooking::query()->create([

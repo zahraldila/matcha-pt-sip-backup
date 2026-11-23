@@ -83,11 +83,17 @@ class CourtScheduleService
             $block = $blocks->first(fn (CourtSlotBlock $item) => $this->overlaps($item->jam_mulai, $item->jam_selesai, $start, $end));
 
             $isCourtAvailable = ($court->status_ketersediaan ?? 'Available') === 'Available';
+            $slotStartsAt = Carbon::parse($date->toDateString().' '.$start);
+            $status = $booking?->status
+                ?? ($block || ! $isCourtAvailable
+                    ? 'Unavailable'
+                    : ($slotStartsAt->isFuture() ? 'Available' : 'Elapsed'));
+
             $slots->push([
                 'start' => $start,
                 'end' => $end,
                 'price' => $settings['price'],
-                'status' => $booking?->status ?? ($block || ! $isCourtAvailable ? 'Unavailable' : 'Available'),
+                'status' => $status,
                 'booking' => $booking,
                 'block' => $block,
             ]);
