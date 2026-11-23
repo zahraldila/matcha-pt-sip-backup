@@ -165,8 +165,6 @@
                                         </div>
                                         @if($court->owner_slots->isEmpty())
                                             <p class="rounded-lg bg-slate-50 px-3 py-4 text-center text-[11px] text-slate-500">Court tutup pada hari ini atau tidak memiliki slot pada filter waktu ini.</p>
-                                        @elseif($slot['status'] === 'Unavailable')
-                                            <p class="mt-1 text-[9px] text-slate-500">Court sedang tidak tersedia.</p>
                                         @else
                                             <div class="grid gap-2 sm:grid-cols-2">
                                                 @foreach($court->owner_slots as $slot)
@@ -206,6 +204,8 @@
                                                                 <input type="hidden" name="date" value="{{ $selectedDate->toDateString() }}">
                                                                 <button class="text-[9px] font-bold text-[#063B00]">Aktifkan kembali slot</button>
                                                             </form>
+                                                        @elseif($slot['status'] === 'Unavailable')
+                                                            <p class="mt-1 text-[9px] text-slate-500">Court sedang tidak tersedia.</p>
                                                         @else
                                                             <p class="mt-1 text-[10px] text-slate-500">Rp {{ number_format($slot['price'], 0, ',', '.') }}</p>
                                                             @if(($court->status_ketersediaan ?? 'Available') === 'Available')
