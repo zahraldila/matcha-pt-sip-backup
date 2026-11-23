@@ -589,23 +589,29 @@ class VenueController extends Controller
         }
         $venue = $query->firstOrFail();
 
-        // Relational check: Jika venue memiliki sesi mabar
-        if ($venue->sessions()->exists()) {
+        // Keep courts and booking history available if the venue has reservations or sessions.
+        if ($venue->sessions()->exists() || $venue->courts()->whereHas('bookings')->exists()) {
             // Safe deactivation: update seluruh court ke Inactive untuk menjaga data match & score
             foreach ($venue->courts as $court) {
                 $court->update(['status_ketersediaan' => 'Inactive']);
             }
             $venue->update([
-                'catatan' => ($venue->catatan ? $venue->catatan.' • ' : '').'Venue dinonaktifkan oleh Administrator.',
+                'catatan' => ($venue->catatan ? $venue->catatan.' • ' : '').'Venue dinonaktifkan untuk menjaga riwayat sesi dan booking.',
             ]);
 
             return redirect()->route('venues.index')
-                ->with('success', "Venue \"{$venue->nama_venue}\" memiliki riwayat sesi mabar, sehingga seluruh lapangan telah dinonaktifkan untuk menjaga riwayat pertandingan.");
+                ->with('success', "Venue \"{$venue->nama_venue}\" memiliki riwayat sesi atau booking, sehingga seluruh lapangan dinonaktifkan untuk menjaga riwayat.");
         }
 
         try {
             DB::beginTransaction();
-            $venue->courts()->delete();
+            foreach ($venue->courts()->get() as $court) {
+                $court->facilities()->detach();
+                $court->schedules()->delete();
+                $court->slotBlocks()->delete();
+                $court->delete();
+            }
+            $venue->facilities()->delete();
             $venue->delete();
             DB::commit();
 

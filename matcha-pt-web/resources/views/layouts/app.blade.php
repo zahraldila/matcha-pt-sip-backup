@@ -85,7 +85,8 @@
     </div>
 
     <!-- Navbar Component -->
-    @include('components.navbar')
+    @includeWhen(!($ownerPortal ?? false), 'components.navbar')
+    @includeWhen($ownerPortal ?? false, 'components.venue-owner-navbar')
 
     <!-- Global Network Quality & Offline Status Banner -->
     @include('components.network-status-banner')
@@ -96,12 +97,14 @@
     </main>
 
     <!-- Mobile Bottom Navigation Bar (Visible only on mobile/tablet) -->
-    @include('components.mobile-bottom-nav')
+    @includeWhen(!($ownerPortal ?? false), 'components.mobile-bottom-nav')
 
     <!-- Footer Component -->
-    <div class="mb-20 md:mb-0">
-        @include('components.footer')
-    </div>
+    @if(!($ownerPortal ?? false))
+        <div class="mb-20 md:mb-0">
+            @include('components.footer')
+        </div>
+    @endif
 
     <!-- Global Delete Confirmation Modal (Glassmorphic) -->
     @include('components.delete-confirm-modal')

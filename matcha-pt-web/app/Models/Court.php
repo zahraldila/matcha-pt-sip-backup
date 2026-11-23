@@ -42,4 +42,24 @@ class Court extends Model
     {
         return $this->hasMany(GameMatch::class, 'court_id', 'court_id');
     }
+
+    public function facilities()
+    {
+        return $this->belongsToMany(VenueFacility::class, 'tb_court_facility', 'court_id', 'facility_id');
+    }
+
+    public function schedules()
+    {
+        return $this->hasMany(CourtSchedule::class, 'court_id', 'court_id');
+    }
+
+    public function bookings()
+    {
+        return $this->hasMany(CourtBooking::class, 'court_id', 'court_id');
+    }
+
+    public function slotBlocks()
+    {
+        return $this->hasMany(CourtSlotBlock::class, 'court_id', 'court_id');
+    }
 }
