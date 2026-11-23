@@ -10,6 +10,7 @@ class Court extends Model
     use HasFactory;
 
     protected $table = 'tb_court';
+
     protected $primaryKey = 'court_id';
 
     protected $fillable = [
@@ -41,5 +42,15 @@ class Court extends Model
     public function matches()
     {
         return $this->hasMany(GameMatch::class, 'court_id', 'court_id');
+    }
+
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class, 'court_id', 'court_id');
+    }
+
+    public function bookingSlots()
+    {
+        return $this->hasMany(BookingSlot::class, 'court_id', 'court_id');
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Game\GameController;
 use App\Http\Controllers\Player\PlayerController;
 use App\Http\Controllers\Scoring\ScoringController;
+use App\Http\Controllers\Venue\BookingController;
 use App\Http\Controllers\Venue\CourtController;
 use App\Http\Controllers\Venue\VenueController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +25,7 @@ Route::get('/.well-known/assetlinks.json', function () {
     if (file_exists($path)) {
         return response(file_get_contents($path), 200, ['Content-Type' => 'application/json']);
     }
+
     return response()->json([], 404);
 });
 Route::get('/.well-known/apple-app-site-association', function () {
@@ -31,6 +33,7 @@ Route::get('/.well-known/apple-app-site-association', function () {
     if (file_exists($path)) {
         return response(file_get_contents($path), 200, ['Content-Type' => 'application/json']);
     }
+
     return response()->json([], 404);
 });
 
@@ -83,6 +86,16 @@ Route::prefix('venues')->name('venues.')->group(function () {
         Route::put('/{id}/courts/{courtId}', [CourtController::class, 'update'])->whereNumber(['id', 'courtId'])->name('courts.update'); // Update court
         Route::delete('/{id}/courts/{courtId}', [CourtController::class, 'destroy'])->whereNumber(['id', 'courtId'])->name('courts.destroy'); // Hapus court
         Route::delete('/bulk-destroy', [VenueController::class, 'bulkDestroy'])->name('bulkDestroy'); // Bulk hapus venue
+    });
+});
+
+// Booking Slots & Venue Bookings
+Route::prefix('venues')->name('venues.')->group(function () {
+    Route::get('/courts/{courtId}/booking-slots', [BookingController::class, 'slots'])->name('booking-slots');
+    Route::middleware('auth')->group(function () {
+        Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
+        Route::get('/bookings/{bookingId}', [BookingController::class, 'show'])->name('bookings.show');
+        Route::post('/bookings/{bookingId}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
     });
 });
 
