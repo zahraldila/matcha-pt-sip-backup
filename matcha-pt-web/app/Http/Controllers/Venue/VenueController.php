@@ -87,7 +87,7 @@ class VenueController extends Controller
                     'operating_hours' => $v->jam_operasional ?: '07:00 - 22:00',
                     'image' => $mainPhoto,
                     'gallery' => $resolvedPhotos,
-                    'fasilitas' => explode(',', $v->fasilitas ?? 'WC, Kantin, Parkir'),
+                    'facilities' => explode(',', $v->fasilitas ?? 'WC, Kantin, Parkir'),
                     'description' => $v->alamat,
                     'courts' => $v->courts,
                 ];
