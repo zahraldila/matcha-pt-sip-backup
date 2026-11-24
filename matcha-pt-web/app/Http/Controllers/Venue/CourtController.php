@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Venue;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\VenueOwner\VenueOwnerCourtResource;
 use App\Models\Court;
 use App\Models\Sport;
 use App\Models\Venue;
+use App\Models\VenueFacility;
+use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 /**
  * CourtController — SMK 2
@@ -91,7 +95,7 @@ class CourtController extends Controller
      * Simpan court baru ke database (mendukung batch multi-court).
      * Route: POST /venues/{id}/courts
      */
-    public function store(Request $request, $id)
+    public function store(Request $request, $id, SupabaseStorageService $storage)
     {
         $venue = $this->ownedVenue($id);
 
@@ -104,6 +108,9 @@ class CourtController extends Controller
                 'courts.*.sport_name' => 'nullable|string',
                 'courts.*.tipe_court' => 'required|string|in:Indoor,Outdoor,Semi-Indoor',
                 'courts.*.harga_per_jam' => 'required|numeric|min:0',
+                'courts.*.facility_ids' => 'nullable|array',
+                'courts.*.facility_ids.*' => 'integer',
+                'courts.*.foto' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             ], [
                 'courts.*.nama_court.not_regex' => 'Nama court tidak boleh mengandung tag script atau karakter khusus (< >).',
             ]);
@@ -113,7 +120,12 @@ class CourtController extends Controller
             $tennisSportId = Sport::whereRaw('LOWER(nama_sport) = ?', ['tennis'])->value('sport_id')
                 ?? $padelSportId;
 
-            foreach ($validated['courts'] as $c) {
+            foreach ($validated['courts'] as $candidate) {
+                $this->assertFacilitiesBelongToVenue($candidate['facility_ids'] ?? [], (int) $venue->venue_id);
+            }
+
+            $createdCourts = collect();
+            foreach ($validated['courts'] as $loopIndex => $c) {
                 $targetSportId = $c['sport_id'] ?? null;
                 if (! $targetSportId && ! empty($c['sport_name'])) {
                     $targetSportId = strtolower($c['sport_name']) === 'tennis' ? $tennisSportId : $padelSportId;
@@ -122,19 +134,31 @@ class CourtController extends Controller
                     $targetSportId = $padelSportId;
                 }
 
-                Court::create([
+                $court = Court::create([
                     'venue_id' => $venue->venue_id,
                     'sport_id' => $targetSportId,
                     'nama_court' => strip_tags($c['nama_court']),
                     'status_ketersediaan' => 'Available',
+                    'image_url' => $request->hasFile("courts.{$loopIndex}.foto")
+                        ? $this->uploadCourtPhoto($request->file("courts.{$loopIndex}.foto"), $storage)
+                        : null,
                     'tipe_court' => $c['tipe_court'],
                     'harga_per_jam' => $c['harga_per_jam'],
                     'deskripsi' => "Tipe: {$c['tipe_court']} • Rp ".number_format($c['harga_per_jam']).'/jam',
                 ]);
+                $this->syncFacilities($court, $c['facility_ids'] ?? [], (int) $venue->venue_id);
+                $createdCourts->push($court);
             }
 
-            return redirect()->route('venues.show', $venue->venue_id)
-                ->with('success', count($validated['courts']).' Court berhasil ditambahkan!');
+            if ($request->expectsJson()) {
+                $createdCourts->each(fn (Court $court) => $court->load(['sport', 'facilities.sport', 'schedules']));
+
+                return VenueOwnerCourtResource::collection($createdCourts)
+                    ->response()
+                    ->setStatusCode(201);
+            }
+
+            return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, count($validated['courts']).' Court berhasil ditambahkan!');
         }
 
         // Fallback untuk single court
@@ -144,10 +168,14 @@ class CourtController extends Controller
             'harga_per_jam' => 'required|numeric|min:0',
             'sport_id' => 'nullable',
             'sport_name' => 'nullable|string',
+            'facility_ids' => 'nullable|array',
+            'facility_ids.*' => 'integer',
+            'foto' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ], [
             'nama_court.not_regex' => 'Nama court tidak boleh mengandung tag script atau karakter khusus (< >).',
         ]);
 
+        $this->assertFacilitiesBelongToVenue($validated['facility_ids'] ?? [], (int) $venue->venue_id);
         $sportId = $validated['sport_id'] ?? null;
         if (! $sportId && ! empty($validated['sport_name'])) {
             $sportId = Sport::whereRaw('LOWER(nama_sport) = ?', [strtolower($validated['sport_name'])])->value('sport_id');
@@ -156,25 +184,32 @@ class CourtController extends Controller
             $sportId = Sport::whereRaw('LOWER(nama_sport) = ?', ['padel'])->value('sport_id') ?? Sport::value('sport_id');
         }
 
-        Court::create([
+        $court = Court::create([
             'venue_id' => $venue->venue_id,
             'sport_id' => $sportId,
             'nama_court' => strip_tags($validated['nama_court']),
             'status_ketersediaan' => 'Available',
+            'image_url' => $request->hasFile('foto') ? $this->uploadCourtPhoto($request->file('foto'), $storage) : null,
             'tipe_court' => $validated['tipe_court'],
             'harga_per_jam' => $validated['harga_per_jam'],
             'deskripsi' => "Tipe: {$validated['tipe_court']} • Rp ".number_format($validated['harga_per_jam']).'/jam',
         ]);
+        $this->syncFacilities($court, $validated['facility_ids'] ?? [], (int) $venue->venue_id);
 
-        return redirect()->route('venues.show', $venue->venue_id)
-            ->with('success', 'Court berhasil ditambahkan!');
+        if ($request->expectsJson()) {
+            return (new VenueOwnerCourtResource($court->load(['sport', 'facilities.sport', 'schedules'])))
+                ->response()
+                ->setStatusCode(201);
+        }
+
+        return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, 'Court berhasil ditambahkan!');
     }
 
     /**
      * Update data court/lapangan di database.
      * Route: PUT /venues/{id}/courts/{courtId}
      */
-    public function update(Request $request, $id, $courtId)
+    public function update(Request $request, $id, $courtId, SupabaseStorageService $storage)
     {
         $venue = $this->ownedVenue($id);
         $court = Court::where('venue_id', $venue->venue_id)->where('court_id', $courtId)->firstOrFail();
@@ -186,12 +221,20 @@ class CourtController extends Controller
             'status_ketersediaan' => 'required|string|in:Available,Maintenance,Inactive',
             'sport_id' => 'nullable',
             'sport_name' => 'nullable|string',
+            'facility_ids' => 'nullable|array',
+            'facility_ids.*' => 'integer',
+            'facility_ids_present' => 'nullable|boolean',
+            'foto' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ], [
             'nama_court.required' => 'Nama court wajib diisi.',
             'nama_court.not_regex' => 'Nama court tidak boleh mengandung tag script atau karakter khusus (< >).',
             'tipe_court.required' => 'Tipe court wajib dipilih.',
             'harga_per_jam.required' => 'Harga per jam wajib diisi.',
         ]);
+
+        if (array_key_exists('facility_ids_present', $validated)) {
+            $this->assertFacilitiesBelongToVenue($validated['facility_ids'] ?? [], (int) $venue->venue_id);
+        }
 
         $sportId = $validated['sport_id'] ?? null;
         if (! $sportId && ! empty($validated['sport_name'])) {
@@ -201,36 +244,58 @@ class CourtController extends Controller
             $sportId = $court->sport_id ?: (Sport::whereRaw('LOWER(nama_sport) = ?', ['padel'])->value('sport_id') ?? Sport::value('sport_id'));
         }
 
-        $court->update([
+        $updates = [
             'nama_court' => strip_tags($validated['nama_court']),
             'sport_id' => $sportId,
             'tipe_court' => $validated['tipe_court'],
             'harga_per_jam' => $validated['harga_per_jam'],
             'status_ketersediaan' => $validated['status_ketersediaan'],
             'deskripsi' => "Tipe: {$validated['tipe_court']} • Rp ".number_format($validated['harga_per_jam']).'/jam',
-        ]);
+        ];
+        if ($request->hasFile('foto')) {
+            $updates['image_url'] = $this->uploadCourtPhoto($request->file('foto'), $storage);
+        }
+        $court->update($updates);
+        if (array_key_exists('facility_ids_present', $validated)) {
+            $this->syncFacilities($court, $validated['facility_ids'] ?? [], (int) $venue->venue_id);
+        }
 
-        return redirect()->route('venues.show', $venue->venue_id)
-            ->with('success', "Data {$court->nama_court} berhasil diperbarui!");
+        if ($request->expectsJson()) {
+            return new VenueOwnerCourtResource($court->load(['sport', 'facilities.sport', 'schedules']));
+        }
+
+        return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, "Data {$court->nama_court} berhasil diperbarui!");
     }
 
-    public function destroy($id, $courtId)
+    public function destroy(Request $request, $id, $courtId)
     {
         $venue = $this->ownedVenue($id);
         $court = Court::where('venue_id', $venue->venue_id)->where('court_id', $courtId)->firstOrFail();
 
         // Relational safety check: Jika court terikat pertandingan atau sesi
-        if ($court->matches()->exists() || $court->sessions()->exists()) {
+        if ($court->matches()->exists() || $court->sessions()->exists() || $court->bookings()->exists()) {
             $court->update(['status_ketersediaan' => 'Inactive']);
 
-            return redirect()->route('venues.show', $venue->venue_id)
-                ->with('success', "Lapangan \"{$court->nama_court}\" memiliki riwayat pertandingan/sesi, sehingga statusnya diubah menjadi Nonaktif (Inactive) untuk menjaga data.");
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => "Lapangan \"{$court->nama_court}\" memiliki riwayat, sehingga statusnya menjadi Inactive.",
+                    'deactivated' => true,
+                ]);
+            }
+
+            return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, "Lapangan \"{$court->nama_court}\" memiliki riwayat pertandingan/sesi/booking, sehingga statusnya diubah menjadi Nonaktif (Inactive) untuk menjaga data.");
         }
 
+        $court->facilities()->detach();
+        $court->schedules()->delete();
+        $court->slotBlocks()->delete();
         $court->delete();
 
-        return redirect()->route('venues.show', $venue->venue_id)
-            ->with('success', 'Lapangan / Court berhasil dihapus.');
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Lapangan / Court berhasil dihapus.', 'deleted' => true]);
+        }
+
+        return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, 'Lapangan / Court berhasil dihapus.');
     }
 
     private function ownedVenue($id, bool $withCourts = false): Venue
@@ -246,5 +311,53 @@ class CourtController extends Controller
         }
 
         return $query->firstOrFail();
+    }
+
+    private function syncFacilities(Court $court, array $facilityIds, int $venueId): void
+    {
+        $facilityIds = array_values(array_unique(array_map('intval', $facilityIds)));
+        $this->assertFacilitiesBelongToVenue($facilityIds, $venueId);
+
+        $court->facilities()->sync($facilityIds);
+    }
+
+    private function assertFacilitiesBelongToVenue(array $facilityIds, int $venueId): void
+    {
+        $facilityIds = array_values(array_unique(array_map('intval', $facilityIds)));
+        if ($facilityIds === []) {
+            return;
+        }
+
+        $validCount = VenueFacility::query()
+            ->where('venue_id', $venueId)
+            ->whereIn('facility_id', $facilityIds)
+            ->count();
+        if ($validCount !== count($facilityIds)) {
+            throw ValidationException::withMessages([
+                'facility_ids' => 'Pilih fasilitas yang terdaftar pada venue ini.',
+            ]);
+        }
+    }
+
+    private function uploadCourtPhoto(\Illuminate\Http\UploadedFile $photo, SupabaseStorageService $storage): string
+    {
+        $url = $storage->upload($photo, 'courts');
+        if (! $url) {
+            throw ValidationException::withMessages(['foto' => 'Foto court gagal disimpan. Silakan coba kembali.']);
+        }
+
+        return $url;
+    }
+
+    private function redirectAfterCourtChange(Request $request, int $venueId, string $message)
+    {
+        if (Auth::user()?->role === 'venue_owner' && $request->boolean('owner_dashboard')) {
+            return redirect()->route('owner.dashboard', [
+                'venue_id' => $venueId,
+                'date' => $request->input('date', now()->toDateString()),
+            ])->with('success', $message);
+        }
+
+        return redirect()->route('venues.show', $venueId)->with('success', $message);
     }
 }

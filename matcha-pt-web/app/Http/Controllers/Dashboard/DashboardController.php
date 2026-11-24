@@ -15,6 +15,10 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        if (Auth::user()?->role === 'venue_owner') {
+            return redirect()->route('owner.dashboard');
+        }
+
         $activeTab = $request->query('tab', 'mabar');
         $selectedSport = $request->query('sport', 'all');
         $selectedCity = $request->query('city', 'all');

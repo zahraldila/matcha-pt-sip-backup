@@ -196,14 +196,14 @@
                             <div class="space-y-1">
                                 <span class="text-[11px] font-semibold text-slate-500">Fasilitas:</span>
                                 <div class="flex flex-wrap gap-1">
-                                    @foreach(array_slice($venue['facilities'], 0, 3) as $fac)
+                                    @foreach(array_slice($venue['facilities'] ?? [], 0, 3) as $fac)
                                         <span class="px-2 py-0.5 rounded-lg bg-slate-100 text-[10px] text-slate-600 border border-slate-200/80">
                                             {{ $fac }}
                                         </span>
                                     @endforeach
-                                    @if(count($venue['facilities']) > 3)
+                                    @if(count($venue['facilities'] ?? []) > 3)
                                         <span class="px-2 py-0.5 rounded-lg bg-slate-100 text-[10px] text-slate-400 border border-slate-200/80">
-                                            +{{ count($venue['facilities']) - 3 }}
+                                            +{{ count($venue['facilities'] ?? []) - 3 }}
                                         </span>
                                     @endif
                                 </div>

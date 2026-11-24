@@ -42,6 +42,11 @@ class Venue extends Model
         return $this->hasMany(Court::class, 'venue_id', 'venue_id');
     }
 
+    public function facilities()
+    {
+        return $this->hasMany(VenueFacility::class, 'venue_id', 'venue_id');
+    }
+
     public function availabilities()
     {
         return $this->hasMany(VenueAvail::class, 'venue_id', 'venue_id');

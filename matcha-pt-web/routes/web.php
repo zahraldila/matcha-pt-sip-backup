@@ -8,7 +8,12 @@ use App\Http\Controllers\Player\PlayerController;
 use App\Http\Controllers\Scoring\ScoringController;
 use App\Http\Controllers\Venue\BookingController;
 use App\Http\Controllers\Venue\CourtController;
+use App\Http\Controllers\Venue\CourtBookingController;
 use App\Http\Controllers\Venue\VenueController;
+use App\Http\Controllers\Venue\VenueFacilityController;
+use App\Http\Controllers\Venue\VenueOwnerApiController;
+use App\Http\Controllers\Venue\VenueOwnerDashboardController;
+use App\Http\Middleware\RequireVenueOwnerApi;
 use Illuminate\Support\Facades\Route;
 
 // Auth Routes (Login, Register, Logout)
@@ -89,15 +94,47 @@ Route::prefix('venues')->name('venues.')->group(function () {
     });
 });
 
-// Booking Slots & Venue Bookings
-Route::prefix('venues')->name('venues.')->group(function () {
-    Route::get('/courts/{courtId}/booking-slots', [BookingController::class, 'slots'])->name('booking-slots');
-    Route::middleware('auth')->group(function () {
-        Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
-        Route::get('/bookings/{bookingId}', [BookingController::class, 'show'])->name('bookings.show');
-        Route::post('/bookings/{bookingId}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
-    });
+// Venue Owner Portal
+Route::prefix('owner')->name('owner.')->middleware('auth')->group(function () {
+    Route::get('/dashboard', [VenueOwnerDashboardController::class, 'index'])->name('dashboard');
+    Route::post('/venues/{venueId}/facilities', [VenueFacilityController::class, 'store'])->whereNumber('venueId')->name('facilities.store');
+    Route::put('/venues/{venueId}/facilities/{facilityId}', [VenueFacilityController::class, 'update'])->whereNumber(['venueId', 'facilityId'])->name('facilities.update');
+    Route::delete('/venues/{venueId}/facilities/{facilityId}', [VenueFacilityController::class, 'destroy'])->whereNumber(['venueId', 'facilityId'])->name('facilities.destroy');
+    Route::post('/courts/{courtId}/schedule', [VenueOwnerDashboardController::class, 'saveSchedule'])->whereNumber('courtId')->name('courts.schedule');
+    Route::post('/courts/{courtId}/blocks', [VenueOwnerDashboardController::class, 'blockSlot'])->whereNumber('courtId')->name('courts.blocks.store');
+    Route::delete('/courts/{courtId}/blocks/{blockId}', [VenueOwnerDashboardController::class, 'unblockSlot'])->whereNumber(['courtId', 'blockId'])->name('courts.blocks.destroy');
+    Route::post('/courts/{courtId}/bookings', [CourtBookingController::class, 'storeManual'])->whereNumber('courtId')->name('bookings.store');
+    Route::post('/bookings/{bookingId}/cancel', [CourtBookingController::class, 'cancel'])->whereNumber('bookingId')->name('bookings.cancel');
 });
+
+Route::prefix('api/v1/owner')
+    ->name('api.v1.owner.')
+    ->middleware(RequireVenueOwnerApi::class)
+    ->group(function () {
+        Route::get('/sports', [VenueOwnerApiController::class, 'sports'])->name('sports.index');
+        Route::get('/venues', [VenueOwnerApiController::class, 'venues'])->name('venues.index');
+        Route::post('/venues', [VenueController::class, 'store'])->name('venues.store');
+        Route::get('/venues/{venueId}', [VenueOwnerApiController::class, 'venue'])->whereNumber('venueId')->name('venues.show');
+        Route::put('/venues/{venueId}', [VenueController::class, 'update'])->whereNumber('venueId')->name('venues.update');
+        Route::delete('/venues/{venueId}', [VenueController::class, 'destroy'])->whereNumber('venueId')->name('venues.destroy');
+
+        Route::post('/venues/{venueId}/facilities', [VenueFacilityController::class, 'store'])->whereNumber('venueId')->name('facilities.store');
+        Route::put('/venues/{venueId}/facilities/{facilityId}', [VenueFacilityController::class, 'update'])->whereNumber(['venueId', 'facilityId'])->name('facilities.update');
+        Route::delete('/venues/{venueId}/facilities/{facilityId}', [VenueFacilityController::class, 'destroy'])->whereNumber(['venueId', 'facilityId'])->name('facilities.destroy');
+
+        Route::post('/venues/{venueId}/courts', [CourtController::class, 'store'])->whereNumber('venueId')->name('courts.store');
+        Route::put('/venues/{venueId}/courts/{courtId}', [CourtController::class, 'update'])->whereNumber(['venueId', 'courtId'])->name('courts.update');
+        Route::delete('/venues/{venueId}/courts/{courtId}', [CourtController::class, 'destroy'])->whereNumber(['venueId', 'courtId'])->name('courts.destroy');
+
+        Route::get('/courts/{courtId}/schedule', [VenueOwnerApiController::class, 'schedule'])->whereNumber('courtId')->name('courts.schedule.show');
+        Route::put('/courts/{courtId}/schedule', [VenueOwnerDashboardController::class, 'saveSchedule'])->whereNumber('courtId')->name('courts.schedule.update');
+        Route::post('/courts/{courtId}/blocks', [VenueOwnerDashboardController::class, 'blockSlot'])->whereNumber('courtId')->name('courts.blocks.store');
+        Route::delete('/courts/{courtId}/blocks/{blockId}', [VenueOwnerDashboardController::class, 'unblockSlot'])->whereNumber(['courtId', 'blockId'])->name('courts.blocks.destroy');
+
+        Route::get('/bookings', [VenueOwnerApiController::class, 'bookings'])->name('bookings.index');
+        Route::post('/courts/{courtId}/bookings', [CourtBookingController::class, 'storeManual'])->whereNumber('courtId')->name('bookings.store');
+        Route::post('/bookings/{bookingId}/cancel', [CourtBookingController::class, 'cancel'])->whereNumber('bookingId')->name('bookings.cancel');
+    });
 
 // Live Match Scoring Console & Recap
 Route::prefix('scoring')->name('scoring.')->group(function () {
