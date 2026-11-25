@@ -48,6 +48,11 @@ class CourtBooking extends Model
         return $this->belongsTo(User::class, 'cancelled_by', 'user_id');
     }
 
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by', 'user_id');
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(CourtBookingPayment::class, 'booking_id', 'booking_id');

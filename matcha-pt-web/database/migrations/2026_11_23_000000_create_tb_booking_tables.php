@@ -27,7 +27,8 @@ return new class extends Migration
             $table->string('customer_name');
             $table->string('customer_phone', 30);
 
-            $table->string('booking_status')->default('confirmed');
+            $table->string('booking_status')->default('pending');
+            $table->timestamp('expires_at')->nullable();
             $table->string('payment_method')->default('cash');
             $table->string('payment_status')->default('unpaid');
 

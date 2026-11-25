@@ -27,6 +27,7 @@ class Booking extends Model
         'customer_name',
         'customer_phone',
         'booking_status',
+        'expires_at',
         'payment_method',
         'payment_status',
     ];
@@ -35,6 +36,7 @@ class Booking extends Model
     {
         return [
             'booking_date' => 'date',
+            'expires_at' => 'datetime',
             'duration_hours' => 'decimal:2',
             'total_price' => 'decimal:2',
         ];

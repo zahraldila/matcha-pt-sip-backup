@@ -1,14 +1,16 @@
 <?php
 
+use App\Http\Controllers\Venue\BookingController;
+
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Community\CommunityController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Game\GameController;
 use App\Http\Controllers\Player\PlayerController;
+use App\Http\Controllers\Player\PlayerCourtBookingController;
 use App\Http\Controllers\Scoring\ScoringController;
-use App\Http\Controllers\Venue\BookingController;
-use App\Http\Controllers\Venue\CourtController;
 use App\Http\Controllers\Venue\CourtBookingController;
+use App\Http\Controllers\Venue\CourtController;
 use App\Http\Controllers\Venue\VenueController;
 use App\Http\Controllers\Venue\VenueFacilityController;
 use App\Http\Controllers\Venue\VenueOwnerApiController;
@@ -73,6 +75,7 @@ Route::get('/mabar/share/{token}', [GameController::class, 'share'])->name('maba
 // Venues & Courts
 Route::prefix('venues')->name('venues.')->group(function () {
     Route::get('/', [VenueController::class, 'index'])->name('index');
+    Route::get('/{id}/court-selection', [VenueController::class, 'courtSelectionPlaceholder'])->whereNumber('id')->name('court-selection');
     Route::get('/{id}', [VenueController::class, 'show'])->whereNumber('id')->name('show');
 
     // Protected: SMK 2 — Venue & Court Manager
@@ -91,6 +94,17 @@ Route::prefix('venues')->name('venues.')->group(function () {
         Route::put('/{id}/courts/{courtId}', [CourtController::class, 'update'])->whereNumber(['id', 'courtId'])->name('courts.update'); // Update court
         Route::delete('/{id}/courts/{courtId}', [CourtController::class, 'destroy'])->whereNumber(['id', 'courtId'])->name('courts.destroy'); // Hapus court
         Route::delete('/bulk-destroy', [VenueController::class, 'bulkDestroy'])->name('bulkDestroy'); // Bulk hapus venue
+    });
+});
+
+// Booking Slots & Venue Bookings
+Route::prefix('venues')->name('venues.')->group(function () {
+    Route::get('/courts/{courtId}/booking-slots', [BookingController::class, 'slots'])->name('booking-slots');
+    Route::middleware('auth')->group(function () {
+        Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
+        Route::get('/bookings/{bookingId}', [BookingController::class, 'show'])->name('bookings.show');
+        Route::post('/bookings/{bookingId}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
+        Route::post('/bookings/{bookingId}/confirm', [BookingController::class, 'confirm'])->name('bookings.confirm');
     });
 });
 
@@ -161,6 +175,13 @@ Route::prefix('player')->name('player.')->middleware('auth')->group(function () 
     Route::get('/profile', [PlayerController::class, 'profile'])->name('profile');
     Route::post('/profile', [PlayerController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/toggle-host', [PlayerController::class, 'toggleHost'])->name('profile.toggle-host');
+});
+
+// User / Player Court Dashboard & Bookings
+Route::get('/user/dashboard', [PlayerCourtBookingController::class, 'dashboard'])->name('user.dashboard');
+Route::middleware('auth')->group(function () {
+    Route::post('/user/bookings', [PlayerCourtBookingController::class, 'store'])->name('player.bookings.store');
+    Route::get('/player/bookings', [PlayerCourtBookingController::class, 'myBookings'])->name('player.bookings.index');
 });
 
 // Community

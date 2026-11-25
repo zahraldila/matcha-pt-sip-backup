@@ -72,6 +72,11 @@ class User extends Authenticatable
         return $this->hasMany(Booking::class, 'user_id', 'user_id');
     }
 
+    public function courtBookings()
+    {
+        return $this->hasMany(CourtBooking::class, 'created_by', 'user_id');
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';

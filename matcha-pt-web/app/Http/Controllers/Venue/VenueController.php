@@ -218,7 +218,18 @@ class VenueController extends Controller
             }),
         ];
 
+        if (! $venue['is_mine']) {
+            return view('venues.detail', compact('venue'));
+        }
+
         return view('venues.show', compact('venue'));
+    }
+
+    public function courtSelectionPlaceholder($id)
+    {
+        $venue = Venue::with(['courts.sport', 'owner', 'availabilities'])->findOrFail((int) $id);
+
+        return view('venues.court-selection', ['venue' => $venue]);
     }
 
     /**
