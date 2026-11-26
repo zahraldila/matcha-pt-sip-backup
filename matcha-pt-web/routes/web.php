@@ -1,7 +1,5 @@
 <?php
 
-use App\Http\Controllers\Venue\BookingController;
-
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Community\CommunityController;
 use App\Http\Controllers\Dashboard\DashboardController;
@@ -97,17 +95,6 @@ Route::prefix('venues')->name('venues.')->group(function () {
     });
 });
 
-// Booking Slots & Venue Bookings
-Route::prefix('venues')->name('venues.')->group(function () {
-    Route::get('/courts/{courtId}/booking-slots', [BookingController::class, 'slots'])->name('booking-slots');
-    Route::middleware('auth')->group(function () {
-        Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
-        Route::get('/bookings/{bookingId}', [BookingController::class, 'show'])->name('bookings.show');
-        Route::post('/bookings/{bookingId}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
-        Route::post('/bookings/{bookingId}/confirm', [BookingController::class, 'confirm'])->name('bookings.confirm');
-    });
-});
-
 // Venue Owner Portal
 Route::prefix('owner')->name('owner.')->middleware('auth')->group(function () {
     Route::get('/dashboard', [VenueOwnerDashboardController::class, 'index'])->name('dashboard');
@@ -178,8 +165,8 @@ Route::prefix('player')->name('player.')->middleware('auth')->group(function () 
 });
 
 // User / Player Court Dashboard & Bookings
-Route::get('/user/dashboard', [PlayerCourtBookingController::class, 'dashboard'])->name('user.dashboard');
 Route::middleware('auth')->group(function () {
+    Route::get('/user/dashboard', [PlayerCourtBookingController::class, 'dashboard'])->name('user.dashboard');
     Route::post('/user/bookings', [PlayerCourtBookingController::class, 'store'])->name('player.bookings.store');
     Route::get('/player/bookings', [PlayerCourtBookingController::class, 'myBookings'])->name('player.bookings.index');
 });
@@ -218,4 +205,15 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/users', [PlayerController::class, 'manageUsers'])->name('users');
     Route::put('/users/{id}', [PlayerController::class, 'updateUser'])->whereNumber('id')->name('users.update');
     Route::delete('/users/{id}', [PlayerController::class, 'destroyUser'])->whereNumber('id')->name('users.destroy');
+});
+
+// Booking Slots & Venue Bookings
+Route::prefix('venues')->name('venues.')->group(function () {
+    Route::get('/courts/{courtId}/booking-slots', [\App\Http\Controllers\Venue\BookingController::class, 'slots'])->name('booking-slots');
+    Route::middleware('auth')->group(function () {
+        Route::post('/bookings', [\App\Http\Controllers\Venue\BookingController::class, 'store'])->name('bookings.store');
+        Route::get('/bookings/{bookingId}', [\App\Http\Controllers\Venue\BookingController::class, 'show'])->name('bookings.show');
+        Route::post('/bookings/{bookingId}/cancel', [\App\Http\Controllers\Venue\BookingController::class, 'cancel'])->name('bookings.cancel');
+        Route::post('/bookings/{bookingId}/confirm', [\App\Http\Controllers\Venue\BookingController::class, 'confirm'])->name('bookings.confirm');
+    });
 });

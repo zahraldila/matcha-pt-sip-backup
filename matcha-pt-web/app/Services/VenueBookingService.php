@@ -15,18 +15,6 @@ class VenueBookingService
 {
     public function getSlots(Court $court, string $date, ?int $userId = null): array
     {
-        if (method_exists(Booking::class, 'query') && \Illuminate\Support\Facades\Schema::hasColumn('tb_booking', 'expires_at')) {
-            Booking::query()
-                ->where('booking_status', 'pending')
-                ->whereNotNull('expires_at')
-                ->where('expires_at', '<=', now())
-                ->update(['booking_status' => 'expired']);
-
-            BookingSlot::query()
-                ->whereHas('booking', fn ($query) => $query->where('booking_status', 'expired'))
-                ->delete();
-        }
-
         $operatingHours = $this->getOperatingHours($court, $date);
         if ($operatingHours === null) {
             return [];
@@ -37,9 +25,6 @@ class VenueBookingService
             ->with('booking')
             ->where('court_id', $court->court_id)
             ->whereDate('slot_date', $date)
-            ->whereHas('booking', function ($query) {
-                $query->whereIn('booking_status', ['pending', 'confirmed']);
-            })
             ->get()
             ->keyBy(fn (BookingSlot $slot) => substr((string) $slot->slot_start, 0, 5));
 
@@ -57,8 +42,6 @@ class VenueBookingService
                 $status = $userId && $booking && (int) $booking->user_id === $userId
                     ? 'Jadwal Saya'
                     : 'Terisi';
-            } elseif (Carbon::createFromFormat('Y-m-d H:i', $date.' '.$start)->lte(now())) {
-                $status = 'Terlewat';
             }
 
             $slots[] = [
@@ -67,7 +50,6 @@ class VenueBookingService
                 'start' => $start,
                 'end' => $cursor->copy()->addHour()->format('H:i'),
                 'status' => $status,
-                'hourly_price' => (float) ($court->harga_per_jam ?? 0),
             ];
             $cursor->addHour();
         }
@@ -114,7 +96,8 @@ class VenueBookingService
             $cursor->addHour();
         }
 
-        $totalPrice = $this->calculateTotal($court, $durationHours);
+        $hourlyPrice = (float) ($court->harga_per_jam ?? 0);
+        $totalPrice = $hourlyPrice * $durationHours;
 
         try {
             return DB::transaction(function () use ($court, $bookingDate, $startTime, $endTime, $durationHours, $totalPrice, $data, $userId, $slotTimes) {
@@ -135,8 +118,9 @@ class VenueBookingService
                     'total_price' => $totalPrice,
                     'customer_name' => (string) $data['customer_name'],
                     'customer_phone' => (string) $data['customer_phone'],
-                    'booking_status' => 'pending',
-                    'expires_at' => now()->addMinutes(15),
+                    'booking_status' => 'confirmed',
+                    'payment_method' => 'cash',
+                    'payment_status' => 'unpaid',
                 ]);
 
                 foreach ($slotTimes as $slotTime) {
@@ -189,52 +173,6 @@ class VenueBookingService
         });
     }
 
-    public function confirmBooking(int $bookingId, int $userId): Booking
-    {
-        return DB::transaction(function () use ($bookingId, $userId) {
-            $booking = Booking::query()
-                ->where('booking_id', $bookingId)
-                ->where('user_id', $userId)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ($booking->booking_status === 'confirmed') {
-                return $booking->load(['court.venue', 'user', 'slots']);
-            }
-
-            if ($booking->booking_status !== 'pending') {
-                throw ValidationException::withMessages(['booking' => 'Booking tidak dapat dikonfirmasi.']);
-            }
-
-            if (! $booking->expires_at || $booking->expires_at->lte(now())) {
-                $booking->booking_status = 'expired';
-                $booking->save();
-                BookingSlot::query()->where('booking_id', $booking->booking_id)->delete();
-                throw ValidationException::withMessages(['booking' => 'Waktu hold booking telah habis. Slot telah dilepas.']);
-            }
-
-            $conflict = BookingSlot::query()
-                ->where('court_id', $booking->court_id)
-                ->where('slot_date', $booking->booking_date)
-                ->whereHas('booking', function ($query) use ($booking) {
-                    $query->whereIn('booking_status', ['pending', 'confirmed'])
-                        ->where('booking_id', '!=', $booking->booking_id);
-                })
-                ->whereIn('slot_start', $booking->slots->pluck('slot_start')->toArray())
-                ->exists();
-
-            if ($conflict) {
-                throw ValidationException::withMessages(['slot' => 'Slot sudah dipesan orang lain']);
-            }
-
-            $booking->booking_status = 'confirmed';
-            $booking->expires_at = null;
-            $booking->save();
-
-            return $booking->load(['court.venue', 'user', 'slots']);
-        });
-    }
-
     private function getOperatingHours(Court $court, string $date): ?array
     {
         $court->loadMissing('venue.availabilities');
@@ -283,10 +221,5 @@ class VenueBookingService
         }
 
         return $time;
-    }
-
-    public function calculateTotal(Court $court, int $durationHours): float
-    {
-        return (float) ($court->harga_per_jam ?? 0) * max(0, $durationHours);
     }
 }

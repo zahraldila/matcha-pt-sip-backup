@@ -65,11 +65,4 @@ class BookingController extends Controller
 
         return response()->json(['booking' => $booking]);
     }
-
-    public function confirm(int $bookingId): JsonResponse
-    {
-        $booking = $this->bookingService->confirmBooking($bookingId, (int) Auth::id());
-
-        return response()->json(['booking' => $booking]);
-    }
 }

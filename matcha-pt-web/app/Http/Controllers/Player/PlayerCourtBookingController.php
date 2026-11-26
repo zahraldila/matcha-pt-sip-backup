@@ -19,6 +19,7 @@ class PlayerCourtBookingController extends Controller
 {
     public function dashboard(Request $request, CourtScheduleService $scheduleService)
     {
+        @set_time_limit(300);
         if (Auth::user()?->role === 'venue_owner') {
             return redirect()->route('owner.dashboard');
         }
@@ -68,8 +69,22 @@ class PlayerCourtBookingController extends Controller
 
         $allCourts = $courtsQuery->get();
 
-        $courts = $allCourts->map(function (Court $court) use ($scheduleService, $selectedDate, $period, $weekday) {
-            $court->setAttribute('user_slots', $scheduleService->slotsFor($court, $selectedDate)
+        $courtIds = $allCourts->pluck('court_id')->all();
+        $dateStr = $selectedDate->toDateString();
+        $bookingsByCourt = \App\Models\CourtBooking::query()
+            ->whereIn('court_id', $courtIds)
+            ->whereDate('tanggal', $dateStr)
+            ->whereIn('status', ['Booked', 'Pending Payment'])
+            ->get()
+            ->groupBy('court_id');
+        $blocksByCourt = \App\Models\CourtSlotBlock::query()
+            ->whereIn('court_id', $courtIds)
+            ->whereDate('tanggal', $dateStr)
+            ->get()
+            ->groupBy('court_id');
+
+        $courts = $allCourts->map(function (Court $court) use ($scheduleService, $selectedDate, $period, $weekday, $bookingsByCourt, $blocksByCourt) {
+            $court->setAttribute('user_slots', $scheduleService->slotsFor($court, $selectedDate, $bookingsByCourt->get($court->court_id, collect()), $blocksByCourt->get($court->court_id, collect()))
                 ->filter(function (array $slot) use ($period) {
                     $hour = (int) substr($slot['start'], 0, 2);
 
@@ -197,31 +212,68 @@ class PlayerCourtBookingController extends Controller
     public function myBookings(Request $request)
     {
         $statusFilter = $request->query('status', 'all');
+        $statusMap = ['booked' => 'Booked', 'pending' => 'Pending Payment', 'cancelled' => 'Cancelled'];
+        $wanted = $statusMap[$statusFilter] ?? null;
 
-        $bookingsQuery = CourtBooking::query()
+        // Booking lama (CourtBooking)
+        $old = CourtBooking::query()
             ->where('created_by', Auth::id())
             ->with(['court.venue', 'court.sport', 'payments', 'cancellations'])
-            ->orderBy('tanggal', 'desc')
-            ->orderBy('jam_mulai', 'desc');
+            ->get();
 
-        if ($statusFilter !== 'all') {
-            $mappedStatus = match ($statusFilter) {
-                'booked' => 'Booked',
-                'pending' => 'Pending Payment',
-                'cancelled' => 'Cancelled',
-                default => $statusFilter,
-            };
-            $bookingsQuery->where('status', $mappedStatus);
+        // Booking dari alur baru (tb_booking), dipetakan ke bentuk yang dipakai view
+        $new = \App\Models\Booking::query()
+            ->where('user_id', Auth::id())
+            ->with(['court.venue', 'court.sport'])
+            ->get()
+            ->map(function ($b) {
+                $status = match ($b->booking_status) {
+                    'confirmed' => 'Booked',
+                    'pending' => 'Pending Payment',
+                    'cancelled' => 'Cancelled',
+                    default => ucfirst((string) $b->booking_status),
+                };
+
+                return (object) [
+                    'status' => $status,
+                    'court' => $b->court,
+                    'payments' => collect(),
+                    'cancellations' => collect(),
+                    'sumber' => 'online',
+                    'tanggal' => \Carbon\Carbon::parse($b->booking_date)->startOfDay(),
+                    'jam_mulai' => substr((string) $b->start_time, 0, 8),
+                    'jam_selesai' => substr((string) $b->end_time, 0, 8),
+                    'jumlah_bayar' => (float) $b->total_price,
+                    'status_pembayaran' => strtolower((string) $b->payment_status) === 'paid' ? 'Paid' : 'Unpaid',
+                    'catatan' => null,
+                    'alasan_pembatalan' => null,
+                    'cancelled_at' => null,
+                ];
+            });
+
+        $all = $old->concat($new);
+        $counts = [
+            'all' => $all->count(),
+            'booked' => $all->where('status', 'Booked')->count(),
+            'pending' => $all->where('status', 'Pending Payment')->count(),
+            'cancelled' => $all->where('status', 'Cancelled')->count(),
+        ];
+
+        if ($wanted) {
+            $all = $all->where('status', $wanted);
         }
 
-        $bookings = $bookingsQuery->paginate(10)->withQueryString();
+        $all = $all->sortByDesc(fn ($b) => $b->tanggal->format('Y-m-d').' '.substr((string) $b->jam_mulai, 0, 5))->values();
 
-        $counts = [
-            'all' => CourtBooking::query()->where('created_by', Auth::id())->count(),
-            'booked' => CourtBooking::query()->where('created_by', Auth::id())->where('status', 'Booked')->count(),
-            'pending' => CourtBooking::query()->where('created_by', Auth::id())->where('status', 'Pending Payment')->count(),
-            'cancelled' => CourtBooking::query()->where('created_by', Auth::id())->where('status', 'Cancelled')->count(),
-        ];
+        $perPage = 10;
+        $page = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
+        $bookings = new \Illuminate\Pagination\LengthAwarePaginator(
+            $all->forPage($page, $perPage)->values(),
+            $all->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return view('player.my-bookings', compact('bookings', 'counts', 'statusFilter'));
     }

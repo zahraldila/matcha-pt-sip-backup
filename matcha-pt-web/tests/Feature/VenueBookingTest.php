@@ -57,10 +57,8 @@ class VenueBookingTest extends TestCase
             'booking_id' => $booking->booking_id,
             'payment_method' => 'cash',
             'payment_status' => 'unpaid',
-            'booking_status' => 'pending',
+            'booking_status' => 'confirmed',
         ]);
-        $confirmed = $this->service->confirmBooking($booking->booking_id, (int) $this->user->user_id);
-        $this->assertSame('confirmed', $confirmed->booking_status);
         $this->assertCount(2, $booking->slots);
     }
 
@@ -166,8 +164,7 @@ class VenueBookingTest extends TestCase
             $table->decimal('total_price', 12, 2);
             $table->string('customer_name');
             $table->string('customer_phone', 30);
-            $table->string('booking_status')->default('pending');
-            $table->timestamp('expires_at')->nullable();
+            $table->string('booking_status')->default('confirmed');
             $table->string('payment_method')->default('cash');
             $table->string('payment_status')->default('unpaid');
             $table->timestamps();

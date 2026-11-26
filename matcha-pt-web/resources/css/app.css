@@ -72,6 +72,12 @@
     color: #050608;
 }
 
+/* Kalender: baris tidak stretch mengikuti tinggi grid */
+#calendar-grid.venue-calendar-grid {
+    align-content: start;
+    grid-auto-rows: 40px;
+}
+
 .venue-calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -93,7 +99,7 @@
 
 .venue-calendar-day {
     width: 100%;
-    aspect-ratio: 1 / 1;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -105,6 +111,7 @@
     font-weight: 700;
     text-align: center;
     cursor: pointer;
+    flex-shrink: 0;
 }
 
 .venue-calendar-day:hover:not(:disabled):not(.is-selected) {

@@ -20,7 +20,7 @@
             <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Booking Saya</h1>
             <p class="mt-1 text-xs text-slate-500">Kelola dan pantau seluruh riwayat sewa lapangan serta status pemesanan court kamu.</p>
         </div>
-        <a href="{{ route('user.dashboard') }}" class="inline-flex items-center gap-2 self-start rounded-xl bg-[#063B00] px-4 py-2.5 text-xs font-extrabold text-white shadow-xs hover:bg-[#042a00] transition sm:self-auto">
+        <a href="{{ route('venues.index') }}" class="inline-flex items-center gap-2 self-start rounded-xl bg-[#063B00] px-4 py-2.5 text-xs font-extrabold text-white shadow-xs hover:bg-[#042a00] transition sm:self-auto">
             <i class="fa-solid fa-plus text-[#A8E63A]"></i>
             <span>Sewa Court Baru</span>
         </a>
@@ -66,7 +66,7 @@
                         Lihat Semua Status
                     </a>
                 @endif
-                <a href="{{ route('user.dashboard') }}" class="inline-flex items-center gap-1.5 rounded-xl bg-[#063B00] px-4 py-2 text-xs font-bold text-white hover:bg-[#042a00]">
+                <a href="{{ route('venues.index') }}" class="inline-flex items-center gap-1.5 rounded-xl bg-[#063B00] px-4 py-2 text-xs font-bold text-white hover:bg-[#042a00]">
                     <i class="fa-solid fa-magnifying-glass text-[#A8E63A]"></i> Cari &amp; Sewa Court
                 </a>
             </div>
