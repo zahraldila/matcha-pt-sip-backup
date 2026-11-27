@@ -17,15 +17,32 @@
 
                 <!-- Desktop Nav -->
                 <nav class="hidden md:flex items-center gap-1">
-                    <a href="{{ route('dashboard') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('dashboard') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
-                        Dashboard
+                    @auth
+                        @if(Auth::user()->role === 'venue_owner')
+                            <a href="{{ route('owner.dashboard') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('owner.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
+                                Dashboard Owner
+                            </a>
+                        @else
+                            <a href="{{ route('user.dashboard') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('user.dashboard') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
+                                Dashboard
+                            </a>
+                        @endif
+                    @else
+                        <a href="{{ route('dashboard') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('dashboard') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
+                            Dashboard
+                        </a>
+                    @endauth
+                    <a href="{{ route('venues.index') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('venues.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
+                        Cari Venue
                     </a>
                     <a href="{{ route('games.index') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('games.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
                         Jadwal Mabar
                     </a>
-                    <a href="{{ route('venues.index') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('venues.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
-                        Venue & Court
-                    </a>
+                    @auth
+                        <a href="{{ route('player.bookings.index') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('player.bookings.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
+                            Booking Saya
+                        </a>
+                    @endauth
                     <a href="{{ route('communities.index') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('communities.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
                         Komunitas
                     </a>
@@ -35,12 +52,12 @@
                                 Manajemen Pengguna
                             </a>
                         @else
-                            <a href="{{ route('player.recap') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('player.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
+                            <a href="{{ route('player.recap') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('player.recap') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
                                 Match Recap
                             </a>
                         @endif
                     @else
-                        <a href="{{ route('player.recap') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('player.*') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
+                        <a href="{{ route('player.recap') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request()->routeIs('player.recap') ? 'bg-[#063B00] text-white shadow-xs font-bold' : 'text-slate-600 hover:text-[#063B00] hover:bg-white/60' }}">
                             Match Recap
                         </a>
                     @endauth
@@ -137,6 +154,9 @@
                                     <i class="fa-solid fa-users-gear text-amber-500 text-xs"></i> Manajemen Pengguna
                                 </a>
                             @else
+                                <a href="{{ route('player.bookings.index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-50 font-semibold transition-colors">
+                                    <i class="fa-solid fa-calendar-check text-[#063B00] text-xs"></i> Booking Saya
+                                </a>
                                 <a href="{{ route('player.recap') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-50 font-semibold transition-colors">
                                     <i class="fa-solid fa-chart-line text-slate-400 text-xs"></i> Match Recap &amp; Statistik
                                 </a>

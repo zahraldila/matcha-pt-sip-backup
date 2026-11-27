@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Venue;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\VenueOwner\VenueOwnerFacilityResource;
 use App\Models\Venue;
 use App\Models\VenueFacility;
 use App\Services\SupabaseStorageService;
@@ -21,13 +22,19 @@ class VenueFacilityController extends Controller
             throw ValidationException::withMessages(['foto' => 'Foto fasilitas gagal disimpan. Silakan coba kembali.']);
         }
 
-        VenueFacility::query()->create([
+        $facility = VenueFacility::query()->create([
             'venue_id' => $venue->venue_id,
             'nama_fasilitas' => $validated['nama_fasilitas'],
             'deskripsi' => $validated['deskripsi'] ?? null,
             'foto' => $photo,
             'sport_id' => $validated['sport_id'] ?? null,
         ]);
+
+        if ($request->expectsJson()) {
+            return (new VenueOwnerFacilityResource($facility->load('sport')))
+                ->response()
+                ->setStatusCode(201);
+        }
 
         return $this->redirectToVenue($venue->venue_id)->with('success', 'Fasilitas berhasil ditambahkan.');
     }
@@ -55,10 +62,14 @@ class VenueFacilityController extends Controller
             'sport_id' => $validated['sport_id'] ?? null,
         ])->save();
 
+        if ($request->expectsJson()) {
+            return new VenueOwnerFacilityResource($facility->load('sport'));
+        }
+
         return $this->redirectToVenue($venue->venue_id)->with('success', 'Informasi fasilitas diperbarui.');
     }
 
-    public function destroy(int $venueId, int $facilityId)
+    public function destroy(Request $request, int $venueId, int $facilityId)
     {
         $venue = $this->ownedVenue($venueId);
         $facility = VenueFacility::query()
@@ -67,6 +78,10 @@ class VenueFacilityController extends Controller
             ->firstOrFail();
         $facility->courts()->detach();
         $facility->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Fasilitas berhasil dihapus.']);
+        }
 
         return $this->redirectToVenue($venue->venue_id)->with('success', 'Fasilitas berhasil dihapus.');
     }

@@ -1,5 +1,7 @@
 @import 'tailwindcss';
+@config '../../tailwind.config.js';
 
+@source '../views/venues/court-selection.blade.php';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
@@ -68,5 +70,68 @@
     background-color: #EBF8D8;
     border: 1px solid #C4E992;
     color: #050608;
+}
+
+/* Kalender: baris tidak stretch mengikuti tinggi grid */
+#calendar-grid.venue-calendar-grid {
+    align-content: start;
+    grid-auto-rows: 40px;
+}
+
+.venue-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+}
+
+.venue-calendar-weekday {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 700;
+    color: #666A73;
+    text-align: center;
+}
+
+.venue-calendar-day {
+    width: 100%;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #050608;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.venue-calendar-day:hover:not(:disabled):not(.is-selected) {
+    background-color: #EBF8D8;
+}
+
+.venue-calendar-day.is-selected {
+    border-color: #063B00;
+    background-color: #063B00;
+    color: #ffffff;
+}
+
+.venue-calendar-day.is-past {
+    background-color: transparent;
+    color: #9CA3AF;
+    cursor: not-allowed;
+}
+
+.venue-calendar-empty {
+    visibility: hidden;
+    cursor: default;
 }
 

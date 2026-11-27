@@ -165,8 +165,6 @@
                                         </div>
                                         @if($court->owner_slots->isEmpty())
                                             <p class="rounded-lg bg-slate-50 px-3 py-4 text-center text-[11px] text-slate-500">Court tutup pada hari ini atau tidak memiliki slot pada filter waktu ini.</p>
-                                        @elseif($slot['status'] === 'Unavailable')
-                                            <p class="mt-1 text-[9px] text-slate-500">Court sedang tidak tersedia.</p>
                                         @else
                                             <div class="grid gap-2 sm:grid-cols-2">
                                                 @foreach($court->owner_slots as $slot)
@@ -175,19 +173,21 @@
                                                             'Booked' => 'border-blue-200 bg-blue-50/70',
                                                             'Pending Payment' => 'border-amber-200 bg-amber-50/70',
                                                             'Unavailable' => 'border-slate-200 bg-slate-100',
+                                                            'Elapsed' => 'border-slate-200 bg-slate-50',
                                                             default => 'border-emerald-200 bg-emerald-50/50',
                                                         };
                                                         $statusClass = match($slot['status']) {
                                                             'Booked' => 'text-blue-700',
                                                             'Pending Payment' => 'text-amber-700',
                                                             'Unavailable' => 'text-slate-600',
+                                                            'Elapsed' => 'text-slate-500',
                                                             default => 'text-emerald-700',
                                                         };
                                                     @endphp
                                                     <div class="rounded-xl border p-3 {{ $slotClass }}">
                                                         <div class="flex items-center justify-between gap-2">
                                                             <span class="text-xs font-extrabold text-slate-900">{{ $slot['start'] }}–{{ $slot['end'] }}</span>
-                                                            <span class="text-[9px] font-extrabold {{ $statusClass }}">{{ $slot['status'] === 'Unavailable' ? 'Diblokir' : $slot['status'] }}</span>
+                                                            <span class="text-[9px] font-extrabold {{ $statusClass }}">{{ $slot['status'] === 'Unavailable' ? ($slot['block'] ? 'Diblokir' : 'Tidak tersedia') : ($slot['status'] === 'Elapsed' ? 'Lewat' : $slot['status']) }}</span>
                                                         </div>
                                                         @if($slot['booking'])
                                                             <p class="mt-1 truncate text-[10px] font-semibold text-slate-700">{{ $slot['booking']->nama_penyewa }}</p>
@@ -206,6 +206,10 @@
                                                                 <input type="hidden" name="date" value="{{ $selectedDate->toDateString() }}">
                                                                 <button class="text-[9px] font-bold text-[#063B00]">Aktifkan kembali slot</button>
                                                             </form>
+                                                        @elseif($slot['status'] === 'Unavailable')
+                                                            <p class="mt-1 text-[9px] text-slate-500">Court sedang tidak tersedia.</p>
+                                                        @elseif($slot['status'] === 'Elapsed')
+                                                            <p class="mt-1 text-[9px] text-slate-500">Waktu sewa ini sudah lewat.</p>
                                                         @else
                                                             <p class="mt-1 text-[10px] text-slate-500">Rp {{ number_format($slot['price'], 0, ',', '.') }}</p>
                                                             @if(($court->status_ketersediaan ?? 'Available') === 'Available')

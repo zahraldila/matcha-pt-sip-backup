@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Venue;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\VenueOwner\VenueOwnerVenueResource;
 use App\Models\Court;
 use App\Models\Sport;
 use App\Models\Venue;
@@ -217,7 +218,18 @@ class VenueController extends Controller
             }),
         ];
 
+        if (! $venue['is_mine']) {
+            return view('venues.detail', compact('venue'));
+        }
+
         return view('venues.show', compact('venue'));
+    }
+
+    public function courtSelectionPlaceholder($id)
+    {
+        $venue = Venue::with(['courts.sport', 'owner', 'availabilities'])->findOrFail((int) $id);
+
+        return view('venues.court-selection', ['venue' => $venue]);
     }
 
     /**
@@ -375,6 +387,15 @@ class VenueController extends Controller
         ]);
         $this->clearVenueCaches();
 
+        if ($request->expectsJson()) {
+            return new VenueOwnerVenueResource($venue->load([
+                'facilities.sport',
+                'courts.sport',
+                'courts.facilities.sport',
+                'courts.schedules',
+            ]));
+        }
+
         return redirect()->route('venues.show', $venue->venue_id)
             ->with('success', 'Informasi venue berhasil diperbarui!');
     }
@@ -489,6 +510,17 @@ class VenueController extends Controller
         ]);
         $this->clearVenueCaches();
 
+        if ($request->expectsJson()) {
+            return (new VenueOwnerVenueResource($venue->load([
+                'facilities.sport',
+                'courts.sport',
+                'courts.facilities.sport',
+                'courts.schedules',
+            ])))
+                ->response()
+                ->setStatusCode(201);
+        }
+
         return redirect()->route('venues.courts.create', [
             'id' => $venue->venue_id,
             'count' => $jumlahCourtFinal,
@@ -576,7 +608,7 @@ class VenueController extends Controller
      * Hapus atau nonaktifkan venue dengan relational safety.
      * Route: DELETE /venues/{id}
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $user = Auth::user();
         if (! $user) {
@@ -599,8 +631,15 @@ class VenueController extends Controller
                 'catatan' => ($venue->catatan ? $venue->catatan.' • ' : '').'Venue dinonaktifkan untuk menjaga riwayat sesi dan booking.',
             ]);
 
-            return redirect()->route('venues.index')
-                ->with('success', "Venue \"{$venue->nama_venue}\" memiliki riwayat sesi atau booking, sehingga seluruh lapangan dinonaktifkan untuk menjaga riwayat.");
+            $message = "Venue \"{$venue->nama_venue}\" memiliki riwayat sesi atau booking, sehingga seluruh lapangan dinonaktifkan untuk menjaga riwayat.";
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'deactivated' => true,
+                ]);
+            }
+
+            return redirect()->route('venues.index')->with('success', $message);
         }
 
         try {
@@ -615,10 +654,19 @@ class VenueController extends Controller
             $venue->delete();
             DB::commit();
 
-            return redirect()->route('venues.index')
-                ->with('success', "Venue \"{$venue->nama_venue}\" berhasil dihapus.");
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Venue berhasil dihapus.', 'deleted' => true]);
+            }
+
+            return redirect()->route('venues.index')->with('success', "Venue \"{$venue->nama_venue}\" berhasil dihapus.");
         } catch (\Exception $e) {
             DB::rollBack();
+
+            if ($request->expectsJson()) {
+                report($e);
+
+                return response()->json(['message' => 'Venue gagal dihapus. Silakan coba kembali.'], 500);
+            }
 
             return redirect()->route('venues.show', $venue->venue_id)
                 ->with('error', 'Gagal menghapus venue: '.$e->getMessage());

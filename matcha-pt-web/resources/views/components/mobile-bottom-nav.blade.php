@@ -9,9 +9,10 @@
             
             <!-- 1. Dashboard (Home) -->
             @php
-                $isDashboard = request()->routeIs('dashboard');
+                $isDashboard = request()->routeIs('dashboard') || request()->routeIs('user.dashboard') || request()->routeIs('owner.dashboard');
+                $dashboardUrl = Auth::check() ? (Auth::user()->role === 'venue_owner' ? route('owner.dashboard') : route('user.dashboard')) : route('dashboard');
             @endphp
-            <a href="{{ route('dashboard') }}" class="flex flex-col items-center justify-center py-1 group transition-all">
+            <a href="{{ $dashboardUrl }}" class="flex flex-col items-center justify-center py-1 group transition-all">
                 <div class="w-8 h-8 rounded-xl flex items-center justify-center transition-all {{ $isDashboard ? 'bg-[#EBF8D8] text-[#063B00] shadow-2xs' : 'text-slate-500 group-hover:text-slate-800' }}">
                     <i class="fa-solid fa-house text-sm"></i>
                 </div>
@@ -79,9 +80,10 @@
 
             <!-- 1. Dashboard (Home) -->
             @php
-                $isDashboard = request()->routeIs('dashboard');
+                $isDashboard = request()->routeIs('dashboard') || request()->routeIs('user.dashboard') || request()->routeIs('owner.dashboard');
+                $dashboardUrl = Auth::check() ? (Auth::user()->role === 'venue_owner' ? route('owner.dashboard') : route('user.dashboard')) : route('dashboard');
             @endphp
-            <a href="{{ route('dashboard') }}" class="flex flex-col items-center justify-center py-1 group transition-all">
+            <a href="{{ $dashboardUrl }}" class="flex flex-col items-center justify-center py-1 group transition-all">
                 <div class="w-8 h-8 rounded-xl flex items-center justify-center transition-all {{ $isDashboard ? 'bg-[#EBF8D8] text-[#063B00] shadow-2xs' : 'text-slate-500 group-hover:text-slate-800' }}">
                     <i class="fa-solid fa-house text-sm"></i>
                 </div>

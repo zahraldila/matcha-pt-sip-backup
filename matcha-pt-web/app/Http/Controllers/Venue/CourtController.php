@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Venue;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\VenueOwner\VenueOwnerCourtResource;
 use App\Models\Court;
 use App\Models\Sport;
 use App\Models\Venue;
@@ -123,6 +124,7 @@ class CourtController extends Controller
                 $this->assertFacilitiesBelongToVenue($candidate['facility_ids'] ?? [], (int) $venue->venue_id);
             }
 
+            $createdCourts = collect();
             foreach ($validated['courts'] as $loopIndex => $c) {
                 $targetSportId = $c['sport_id'] ?? null;
                 if (! $targetSportId && ! empty($c['sport_name'])) {
@@ -145,6 +147,15 @@ class CourtController extends Controller
                     'deskripsi' => "Tipe: {$c['tipe_court']} • Rp ".number_format($c['harga_per_jam']).'/jam',
                 ]);
                 $this->syncFacilities($court, $c['facility_ids'] ?? [], (int) $venue->venue_id);
+                $createdCourts->push($court);
+            }
+
+            if ($request->expectsJson()) {
+                $createdCourts->each(fn (Court $court) => $court->load(['sport', 'facilities.sport', 'schedules']));
+
+                return VenueOwnerCourtResource::collection($createdCourts)
+                    ->response()
+                    ->setStatusCode(201);
             }
 
             return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, count($validated['courts']).' Court berhasil ditambahkan!');
@@ -184,6 +195,12 @@ class CourtController extends Controller
             'deskripsi' => "Tipe: {$validated['tipe_court']} • Rp ".number_format($validated['harga_per_jam']).'/jam',
         ]);
         $this->syncFacilities($court, $validated['facility_ids'] ?? [], (int) $venue->venue_id);
+
+        if ($request->expectsJson()) {
+            return (new VenueOwnerCourtResource($court->load(['sport', 'facilities.sport', 'schedules'])))
+                ->response()
+                ->setStatusCode(201);
+        }
 
         return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, 'Court berhasil ditambahkan!');
     }
@@ -243,6 +260,10 @@ class CourtController extends Controller
             $this->syncFacilities($court, $validated['facility_ids'] ?? [], (int) $venue->venue_id);
         }
 
+        if ($request->expectsJson()) {
+            return new VenueOwnerCourtResource($court->load(['sport', 'facilities.sport', 'schedules']));
+        }
+
         return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, "Data {$court->nama_court} berhasil diperbarui!");
     }
 
@@ -255,6 +276,13 @@ class CourtController extends Controller
         if ($court->matches()->exists() || $court->sessions()->exists() || $court->bookings()->exists()) {
             $court->update(['status_ketersediaan' => 'Inactive']);
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => "Lapangan \"{$court->nama_court}\" memiliki riwayat, sehingga statusnya menjadi Inactive.",
+                    'deactivated' => true,
+                ]);
+            }
+
             return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, "Lapangan \"{$court->nama_court}\" memiliki riwayat pertandingan/sesi/booking, sehingga statusnya diubah menjadi Nonaktif (Inactive) untuk menjaga data.");
         }
 
@@ -262,6 +290,10 @@ class CourtController extends Controller
         $court->schedules()->delete();
         $court->slotBlocks()->delete();
         $court->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Lapangan / Court berhasil dihapus.', 'deleted' => true]);
+        }
 
         return $this->redirectAfterCourtChange($request, (int) $venue->venue_id, 'Lapangan / Court berhasil dihapus.');
     }

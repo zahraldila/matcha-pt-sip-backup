@@ -6,6 +6,7 @@ use App\Models\Court;
 use App\Models\CourtBooking;
 use App\Models\User;
 use App\Models\Venue;
+use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -69,9 +70,138 @@ class VenueOwnerBookingTest extends TestCase
             'booking_id' => $booking->booking_id,
             'status' => 'Cancelled',
         ]);
+        $this->assertDatabaseHas('tb_court_booking_cancellation', [
+            'booking_id' => $booking->booking_id,
+            'reason' => 'Permintaan perubahan jadwal',
+            'previous_status' => 'Booked',
+        ]);
 
         $this->post(route('owner.bookings.store', $court->court_id), $payload)->assertRedirect();
         $this->assertSame(2, CourtBooking::query()->count());
+    }
+
+    public function test_owner_api_records_manual_payment_and_cancellation_history(): void
+    {
+        $owner = User::query()->create([
+            'nama' => 'API Venue Owner',
+            'email' => 'api-owner@example.test',
+            'password' => bcrypt('secret'),
+            'role' => 'venue_owner',
+        ]);
+        $venue = Venue::query()->create([
+            'owner_user_id' => $owner->user_id,
+            'nama_venue' => 'API Matcha Arena',
+            'jam_operasional' => '07:00 - 22:00',
+        ]);
+        $court = Court::query()->create([
+            'venue_id' => $venue->venue_id,
+            'nama_court' => 'Court API',
+            'status_ketersediaan' => 'Available',
+            'harga_per_jam' => 100000,
+        ]);
+        $date = now()->addDay()->toDateString();
+
+        $this->actingAs($owner)
+            ->postJson("/api/v1/owner/courts/{$court->court_id}/bookings", [
+                'tanggal' => $date,
+                'jam_mulai' => '10:00',
+                'jam_selesai' => '11:00',
+                'nama_penyewa' => 'Penyewa API',
+                'status_pembayaran' => 'Pending',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'Pending Payment');
+
+        $booking = CourtBooking::query()->firstOrFail();
+        $this->assertDatabaseHas('tb_court_booking_payment', [
+            'booking_id' => $booking->booking_id,
+            'provider' => 'manual',
+            'status' => 'Pending',
+        ]);
+
+        $this->get("/api/v1/owner/courts/{$court->court_id}/schedule?date={$date}")
+            ->assertOk()
+            ->assertJsonPath('data.slots.3.status', 'Pending Payment')
+            ->assertJsonPath('data.slots.3.booking.renter_name', 'Penyewa API');
+
+        $this->postJson("/api/v1/owner/courts/{$court->court_id}/bookings", [
+            'tanggal' => $date,
+            'jam_mulai' => '10:00',
+            'jam_selesai' => '11:00',
+            'nama_penyewa' => 'Penyewa Duplikat',
+            'status_pembayaran' => 'Pending',
+        ])->assertUnprocessable();
+        $this->assertSame(1, CourtBooking::query()->count());
+
+        $this->postJson("/api/v1/owner/bookings/{$booking->booking_id}/cancel", [
+            'alasan_pembatalan' => 'Jadwal perlu ditutup',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'Cancelled');
+
+        $this->assertDatabaseHas('tb_court_booking_cancellation', [
+            'booking_id' => $booking->booking_id,
+            'reason' => 'Jadwal perlu ditutup',
+            'previous_status' => 'Pending Payment',
+            'previous_payment_status' => 'Pending',
+        ]);
+    }
+
+    public function test_owner_api_rejects_unauthenticated_and_non_owner_users(): void
+    {
+        $this->get('/api/v1/owner/venues')->assertUnauthorized();
+
+        $player = User::query()->create([
+            'nama' => 'Player',
+            'email' => 'player@example.test',
+            'password' => bcrypt('secret'),
+            'role' => 'member',
+        ]);
+
+        $this->actingAs($player)
+            ->get('/api/v1/owner/venues')
+            ->assertForbidden();
+    }
+
+    public function test_past_manual_booking_returns_to_form_with_validation_error(): void
+    {
+        $owner = User::query()->create([
+            'nama' => 'Venue Owner',
+            'email' => 'past-owner@example.test',
+            'password' => bcrypt('secret'),
+            'role' => 'venue_owner',
+        ]);
+        $venue = Venue::query()->create([
+            'owner_user_id' => $owner->user_id,
+            'nama_venue' => 'Matcha Arena',
+            'jam_operasional' => '07:00 - 22:00',
+        ]);
+        $court = Court::query()->create([
+            'venue_id' => $venue->venue_id,
+            'nama_court' => 'Court 1',
+            'status_ketersediaan' => 'Available',
+            'harga_per_jam' => 100000,
+        ]);
+        $date = now()->toDateString();
+        Carbon::setTestNow(Carbon::parse($date.' 15:00:00'));
+
+        try {
+            $this->actingAs($owner)
+                ->from(route('owner.dashboard'))
+                ->post(route('owner.bookings.store', $court->court_id), [
+                    'tanggal' => $date,
+                    'jam_mulai' => '10:00',
+                    'jam_selesai' => '11:00',
+                    'nama_penyewa' => 'Penyewa Test',
+                    'status_pembayaran' => 'Paid',
+                ])
+                ->assertRedirect(route('owner.dashboard'))
+                ->assertSessionHasErrors('jam_mulai');
+
+            $this->assertSame(0, CourtBooking::query()->count());
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     private function createTestSchema(): void
@@ -126,6 +256,34 @@ class VenueOwnerBookingTest extends TestCase
                 $table->unsignedBigInteger('cancelled_by')->nullable();
                 $table->timestamp('cancelled_at')->nullable();
                 $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('tb_court_booking_payment')) {
+            Schema::create('tb_court_booking_payment', function (Blueprint $table): void {
+                $table->id('payment_id');
+                $table->unsignedBigInteger('booking_id');
+                $table->string('provider');
+                $table->string('provider_reference')->nullable();
+                $table->string('metode_pembayaran')->nullable();
+                $table->decimal('jumlah', 12, 2)->default(0);
+                $table->string('status');
+                $table->timestamp('paid_at')->nullable();
+                $table->json('metadata')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('tb_court_booking_cancellation')) {
+            Schema::create('tb_court_booking_cancellation', function (Blueprint $table): void {
+                $table->id('cancellation_id');
+                $table->unsignedBigInteger('booking_id');
+                $table->unsignedBigInteger('cancelled_by')->nullable();
+                $table->string('previous_status');
+                $table->string('previous_payment_status');
+                $table->text('reason');
+                $table->timestamp('cancelled_at');
                 $table->timestamps();
             });
         }

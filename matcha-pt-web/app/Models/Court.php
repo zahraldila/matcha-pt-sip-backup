@@ -10,6 +10,7 @@ class Court extends Model
     use HasFactory;
 
     protected $table = 'tb_court';
+
     protected $primaryKey = 'court_id';
 
     protected $fillable = [

@@ -161,6 +161,26 @@ class VenueOwnerDashboardController extends Controller
             );
         });
 
+        if ($request->expectsJson()) {
+            $schedule = CourtSchedule::query()
+                ->where('court_id', $court->court_id)
+                ->where('weekday', $validated['weekday'])
+                ->firstOrFail();
+
+            return response()->json([
+                'message' => 'Jadwal operasional court diperbarui.',
+                'data' => [
+                    'court_id' => $schedule->court_id,
+                    'weekday' => $schedule->weekday,
+                    'is_open' => $schedule->is_open,
+                    'opens_at' => substr((string) $schedule->jam_buka, 0, 5),
+                    'closes_at' => substr((string) $schedule->jam_tutup, 0, 5),
+                    'slot_duration_minutes' => $schedule->durasi_menit,
+                    'price_per_slot' => $schedule->harga_per_slot,
+                ],
+            ]);
+        }
+
         return $this->dashboardRedirect($court->venue_id, $request)->with('success', 'Jadwal operasional court diperbarui.');
     }
 
@@ -174,10 +194,11 @@ class VenueOwnerDashboardController extends Controller
             'alasan' => ['nullable', 'string', 'max:180'],
         ]);
 
-        DB::transaction(function () use ($court, $validated, $scheduleService) {
+        $block = DB::transaction(function () use ($court, $validated, $scheduleService) {
             $lockedCourt = Court::query()->where('court_id', $court->court_id)->lockForUpdate()->firstOrFail();
             $scheduleService->assertRangeAvailable($lockedCourt, $validated['tanggal'], $validated['jam_mulai'], $validated['jam_selesai']);
-            CourtSlotBlock::query()->create([
+
+            return CourtSlotBlock::query()->create([
                 'court_id' => $lockedCourt->court_id,
                 'tanggal' => Carbon::parse($validated['tanggal'])->toDateString(),
                 'jam_mulai' => $validated['jam_mulai'],
@@ -187,17 +208,35 @@ class VenueOwnerDashboardController extends Controller
             ]);
         });
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Slot waktu dinonaktifkan.',
+                'data' => [
+                    'id' => $block->block_id,
+                    'court_id' => $block->court_id,
+                    'date' => $block->tanggal->toDateString(),
+                    'starts_at' => substr((string) $block->jam_mulai, 0, 5),
+                    'ends_at' => substr((string) $block->jam_selesai, 0, 5),
+                    'reason' => $block->alasan,
+                ],
+            ], 201);
+        }
+
         return $this->dashboardRedirect($court->venue_id, $request)->with('success', 'Slot waktu dinonaktifkan.');
     }
 
     public function unblockSlot(Request $request, int $courtId, int $blockId)
     {
         $court = $this->ownedCourt($courtId);
-        CourtSlotBlock::query()
+        $block = CourtSlotBlock::query()
             ->where('court_id', $court->court_id)
             ->where('block_id', $blockId)
-            ->firstOrFail()
-            ->delete();
+            ->firstOrFail();
+        $block->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Slot kembali tersedia.']);
+        }
 
         return $this->dashboardRedirect($court->venue_id, $request)->with('success', 'Slot kembali tersedia.');
     }

@@ -18,10 +18,12 @@ class CourtScheduleService
      */
     public function settingsFor(Court $court, int $weekday): array
     {
-        $schedule = CourtSchedule::query()
-            ->where('court_id', $court->court_id)
-            ->where('weekday', $weekday)
-            ->first();
+        $schedule = $court->relationLoaded('schedules')
+            ? $court->schedules->firstWhere('weekday', $weekday)
+            : CourtSchedule::query()
+                ->where('court_id', $court->court_id)
+                ->where('weekday', $weekday)
+                ->first();
 
         if ($schedule) {
             return [
@@ -55,19 +57,19 @@ class CourtScheduleService
      *     block: ?CourtSlotBlock
      * }>
      */
-    public function slotsFor(Court $court, CarbonInterface $date): Collection
+    public function slotsFor(Court $court, CarbonInterface $date, ?Collection $prefetchedBookings = null, ?Collection $prefetchedBlocks = null): Collection
     {
         $settings = $this->settingsFor($court, (int) $date->dayOfWeekIso);
         if (! $settings['is_open'] || $settings['duration'] < 1) {
             return collect();
         }
 
-        $bookings = CourtBooking::query()
+        $bookings = $prefetchedBookings ?? CourtBooking::query()
             ->where('court_id', $court->court_id)
             ->whereDate('tanggal', $date->toDateString())
             ->whereIn('status', ['Booked', 'Pending Payment'])
             ->get();
-        $blocks = CourtSlotBlock::query()
+        $blocks = $prefetchedBlocks ?? CourtSlotBlock::query()
             ->where('court_id', $court->court_id)
             ->whereDate('tanggal', $date->toDateString())
             ->get();
@@ -83,11 +85,17 @@ class CourtScheduleService
             $block = $blocks->first(fn (CourtSlotBlock $item) => $this->overlaps($item->jam_mulai, $item->jam_selesai, $start, $end));
 
             $isCourtAvailable = ($court->status_ketersediaan ?? 'Available') === 'Available';
+            $slotStartsAt = Carbon::parse($date->toDateString().' '.$start);
+            $status = $booking?->status
+                ?? ($block || ! $isCourtAvailable
+                    ? 'Unavailable'
+                    : ($slotStartsAt->isFuture() ? 'Available' : 'Elapsed'));
+
             $slots->push([
                 'start' => $start,
                 'end' => $end,
                 'price' => $settings['price'],
-                'status' => $booking?->status ?? ($block || ! $isCourtAvailable ? 'Unavailable' : 'Available'),
+                'status' => $status,
                 'booking' => $booking,
                 'block' => $block,
             ]);
