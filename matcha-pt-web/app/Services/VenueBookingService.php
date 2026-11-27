@@ -101,10 +101,13 @@ class VenueBookingService
 
         try {
             return DB::transaction(function () use ($court, $bookingDate, $startTime, $endTime, $durationHours, $totalPrice, $data, $userId, $slotTimes) {
-                $sequence = Booking::query()
-                    ->whereDate('booking_date', $bookingDate)
+                $prefix = 'MT-'.Carbon::parse($bookingDate)->format('Ymd').'-';
+                $lastCode = Booking::query()
+                    ->where('booking_code', 'like', $prefix.'%')
+                    ->orderByDesc('booking_code')
                     ->lockForUpdate()
-                    ->count() + 1;
+                    ->value('booking_code');
+                $sequence = $lastCode ? ((int) substr($lastCode, -3)) + 1 : 1;
                 $bookingCode = 'MT-'.Carbon::parse($bookingDate)->format('Ymd').'-'.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT);
 
                 $booking = Booking::create([
@@ -221,5 +224,28 @@ class VenueBookingService
         }
 
         return $time;
+    }
+
+    public function confirmBooking(int $bookingId, int $userId): Booking
+    {
+        return DB::transaction(function () use ($bookingId, $userId) {
+            $booking = Booking::query()
+                ->where('booking_id', $bookingId)
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($booking->booking_status === 'cancelled') {
+                throw ValidationException::withMessages(['slot' => 'Booking sudah dibatalkan.']);
+            }
+
+            $booking->booking_status = 'confirmed';
+            if (array_key_exists('expires_at', $booking->getAttributes())) {
+                $booking->expires_at = null;
+            }
+            $booking->save();
+
+            return $booking->load(['court', 'user', 'slots']);
+        });
     }
 }
