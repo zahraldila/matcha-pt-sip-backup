@@ -90,7 +90,7 @@ class _VenueDetailPageState extends State<VenueDetailPage> {
       return;
     }
 
-    // Khusus Venue Owner: hanya boleh buat mabar jika ini venuenya sendiri!
+    // Khusus Venue Owner: hanya boleh buat mabar jika ini venuenya   !
     if (user.isVenueOwner) {
       final isMyVenue = _venue != null && _venue!.ownerUserId == user.userId;
       if (!isMyVenue) {
